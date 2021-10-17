@@ -1,0 +1,18 @@
+---
+title: "P8105 Homework 3"
+author: Mengfan Luo (ml4701)
+output: github_document
+---
+
+
+```{r}
+library(tidyverse)
+
+
+knitr::opts_chunk$set(
+  fig.width = 6,
+  fig.asp =.6,
+  out.width = "90%"
+)
+```
+
