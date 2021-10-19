@@ -5,14 +5,200 @@ output: github_document
 ---
 
 
-```{r}
+```{r, echo=FALSE,message=FALSE}
 library(tidyverse)
-
-
-knitr::opts_chunk$set(
-  fig.width = 6,
-  fig.asp =.6,
-  out.width = "90%"
-)
+library(p8105.datasets)
 ```
 
+
+### Problem 1
+
+Let's load the `instacart` data and view the first 10 lines of it:
+
+```{r}
+data("instacart")
+knitr::kable(head(instacart,15))
+```
+
+
+```{r, results='hide'}
+skimr::skim(instacart)
+# Results is for my reference and is not shown in the report
+colnames_inst = colnames(instacart)
+```
+
+#### EDA
+
+The `intacart` dataset has `r nrow(instacart)` rows and `r ncol(instacart)` columns. There's `r sum(is.na(instacart))` missing value. 
+
+The `r ncol(instacart)` variables include 4 character variables and 11 numeric variables, which are:
+
+**numeric variables:**
+
+* `order_id`: despite consist of numbers, this should be an character variable given it's a series number used for identifying different orders, rather then have any quantitative information. There are `r n_distinct(pull(instacart,order_id))` distinct values of `order_id`.
+
+Some other numeric variable here have the issues, in cluding:
+
+* `product_id`: `r n_distinct(pull(instacart,product_id))` distinct values.
+* `add_to_cart_order`: `r n_distinct(pull(instacart,add_to_cart_order))` distinct values.
+* `reordered`: `r n_distinct(pull(instacart,reordered))` distinct values.
+* `user_id`: `r n_distinct(pull(instacart,user_id))` distinct values.
+* `order_dow`: `r n_distinct(pull(instacart,order_dow))` distinct values.
+* `order_hour_of_day`: `r n_distinct(pull(instacart,order_hour_of_day))` distinct values.
+* `aisle_id`: `r n_distinct(pull(instacart,aisle_id))` distinct values.
+* `department_id`: `r n_distinct(pull(instacart,department_id))` distinct values.
+
+Other "true" numeric variables are:
+
+* `order_number`: numeric variable with mean `r mean(pull(instacart,order_number))` and range [`r range(pull(instacart,order_number))`]. 
+* `days_since_prior_order`: numeric variable with mean `r mean(pull(instacart, days_since_prior_order))` and range [`r range(pull(instacart, days_since_prior_order))`]. 
+
+**character variables:**
+
+* `eval_set`: `r n_distinct(pull(instacart,eval_set))` distinct value. This variable may not be so crucial since it only has `r n_distinct(pull(instacart,eval_set))` unique value ``r unique(pull(instacart,eval_set))``.
+* `product_name`: `r n_distinct(pull(instacart,product_name))` distinct values.
+* `aisle`: `r n_distinct(pull(instacart,aisle))` distinct values.
+* `department`: `r n_distinct(pull(instacart,department))` distinct values.
+
+Some variables have a one-to-one mapping relationship, including
+
+* `product_id` and `product_name`
+* `aisle_id` and `aisle`
+* `department_id` and `department`
+
+and each pair has exact number of unique values.
+
+```{r}
+names(instacart)
+
+tibble(
+  var = c("product_id", "product_name", 
+          "aisle_id", "aisle" , 
+          "department_id" , "department"),
+  unique_var = c(n_distinct(pull(instacart,product_id)),
+                 n_distinct(pull(instacart,product_name)),
+                 n_distinct(pull(instacart,aisle_id)),
+                 n_distinct(pull(instacart,aisle)),
+                 n_distinct(pull(instacart,department_id)),
+                 n_distinct(pull(instacart,department)))
+) %>% knitr::kable()
+
+```
+
+Besides, we can also see number of unique `order_id` is equal to that of `user_id`, both are 131209. This means in this dataset, only one order is included for each unique user.
+
+```{r}
+instacart %>% 
+  group_by(user_id) %>% 
+  summarize(distinct_order = n_distinct(order_id)) %>% 
+  arrange(distinct_order)
+```
+
+For each order, we can summarize some important features and plots as followed.
+
+```{r}
+inst_order = instacart %>% 
+  group_by(order_id) %>% 
+  mutate(
+    n_product = n_distinct(product_id)
+    ) %>%
+  select(order_id,order_number,order_dow,order_hour_of_day,n_product) %>% 
+  distinct() %>% 
+  relocate(order_id,n_product) 
+
+knitr::kable(head(inst_order,10))
+
+min(pull(inst_order,n_product))
+max(pull(inst_order,n_product))
+mean(pull(inst_order,n_product))
+
+```
+
+We can find that the minimum number of product bought is 1, maximum is 80, and average number is about 11. The number of products in seperate orders can be visualized as the following bar plot. 
+
+```{r}
+inst_order %>% 
+  ggplot(aes(x=n_product))+ geom_histogram()+
+  labs(
+    title = "Count of number of products purchased in seperate orders",
+    x = "Number of products in seperate orders",
+    y = "Count of orders"
+  )
+  
+
+```
+
+#### Questions
+
+**1. How many aisles are there, and which aisles are the most items ordered from?**
+
+```{r}
+n_distinct(pull(instacart,aisle))
+
+instacart %>% 
+  group_by(aisle) %>% 
+  summarize(n_items = n()) %>% 
+  arrange(by = desc(n_items))
+```
+
+From the above results, there are 134 aisles, and the top 2 aisles that have most items ordered from are `fresh vegetables` and `fresh fruits`.
+
+**2. Make a plot that shows the number of items ordered in each aisle, limiting this to aisles with more than 10000 items ordered. Arrange aisles sensibly, and organize your plot so others can read it.**
+
+```{r}
+instacart %>% 
+  group_by(aisle) %>% 
+  summarize(n_items = n()) %>% 
+  filter(n_items > 10000) %>% 
+  mutate(aisle = fct_reorder(aisle,n_items),
+         ) %>% 
+  ggplot(aes(x = n_items, y = aisle))+
+  geom_point(color = "red")+
+  labs(
+    title = "Number of items ordered in each aisle",
+    subtitle = "(for number of items more than 10000)",
+    x = "number of items",
+    y = "Aisle"
+  )
+```
+
+
+**3. Make a table showing the three most popular items in each of the aisles "baking ingredients", "dog food care", and "packaged vegetables fruits". Include the number of times each item is ordered in your table.**
+
+
+```{r}
+instacart %>% 
+  select(aisle,product_name) %>% 
+  filter(aisle == "baking ingredients" | aisle == "dog food care" | aisle == "packaged vegetables fruits") %>% 
+  group_by(product_name) %>% 
+  mutate(n_product = n())%>% 
+  distinct() %>% 
+  group_by(aisle) %>% 
+  mutate(rank = min_rank(desc(n_product))) %>% 
+  filter(rank == 1|rank ==2 | rank ==3) %>% 
+  arrange(aisle,rank) %>% 
+  knitr::kable()
+
+```
+
+The above table showsthe three most popular items in each of the aisles "baking ingredients", "dog food care", and "packaged vegetables fruits". The number of times each item is ordered are presented in column `n_product`
+
+
+**4. Make a table showing the mean hour of the day at which Pink Lady Apples and Coffee Ice Cream are ordered on each day of the week; format this table for human readers (i.e. produce a 2 x 7 table).**
+
+```{r}
+hour_week = instacart %>% 
+  select(product_name, order_dow,order_hour_of_day) %>% 
+  filter(product_name == "Pink Lady Apples" | product_name == "Coffee Ice Cream") %>% 
+  group_by(product_name,order_dow) %>% 
+  mutate(mean_hour = mean(order_hour_of_day)) %>% 
+  select(-order_hour_of_day) %>% 
+  distinct() %>% 
+  pivot_wider(names_from = order_dow,values_from = mean_hour,names_sort = TRUE)
+colnames(hour_week) = c("Products/Days","Sun","Mon","Tue","Wed","Thu","Fri","Sat")
+  
+knitr::kable(hour_week)
+
+```
+
+The above 2*7 table shows the mean hour of the day at which `Pink Lady Apples` and `Coffee Ice Cream` are ordered from Sun to Sat.
