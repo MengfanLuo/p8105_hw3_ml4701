@@ -9,6 +9,7 @@ output: github_document
 library(tidyverse)
 library(p8105.datasets)
 library(viridis)
+library(ggridges)
 
 knitr::opts_chunk$set(
   fig.width = 6,
@@ -216,10 +217,7 @@ data("brfss_smart2010")
 brfss = brfss_smart2010 %>% 
   janitor::clean_names() %>% 
   filter(topic == "Overall Health",
-         response == "Excellent" | response == "Poor") %>% 
-  mutate(
-    response = fct_reorder(response,response, .desc = TRUE)
-  )
+         response %in% c('Excellent','Very good','Good','Fair','Poor')) 
 
 knitr::kable(head(brfss,10))
 ```
@@ -290,23 +288,92 @@ excl_df %>%
 
 **3. Make a two-panel plot showing, for the years 2006, and 2010, distribution of data_value for responses ("Poor" to "Excellent") among locations in NY State.**
 
-The following violin plot shows the differences in distribution of `data_value` for `response`s "Poor" and "Excellent" between 2006 and 2010 among locations in NY State.
+The following violin plot shows the differences in distribution of `data_value` for `response`s 'Poor','Fair','Good','Very good','Excellent' between 2006 and 2010 among locations in NY State.
 
 ```{r}
 brfss %>% 
   filter(year == 2006 | year == 2010,
          locationabbr == "NY") %>% 
+  mutate(
+    response = factor(response,order = TRUE, 
+        levels = c('Poor','Fair','Good','Very good','Excellent'))
+    ) %>% 
   select(year,response,data_value) %>% 
-  ggplot(aes(x = response, y = data_value, color = response))+
-  geom_violin(aes(fill = response))+
+  ggplot(aes( x = data_value,y = response, fill = response))+
+  geom_density_ridges(alpha = .6,scale = 0.8) +
+  #geom_dist(aes(fill = response))+
   facet_grid(.~year)+
   labs(
-    title = "Distribution of data_value for responses \"Poor\" and \"Excellent\"",
+    title = "Distribution of data_value for responses from \"Poor\" to \"Excellent\"",
     subtitle = "A comparison between Year 2006 and 2010 among locations in NY State",
     x = "Responses",
     y = "Data_value of locations within NY state"
   )
 ```
+
+
+### Problem 3
+
+#### Loading and tidying data
+
+```{r}
+accel_df = read_csv("data/accel_data.csv") %>% 
+  janitor::clean_names() %>% 
+  mutate(
+    weekend = ifelse(day %in% c("Saturday","Sunday"),1,0),
+    ) %>% 
+  pivot_longer(4:1443,names_to = "minute", names_prefix = "activity_",values_to = "activity_count") %>% 
+  mutate(
+    weekend = as.factor(weekend),
+    minute = as.numeric(minute)
+    ) 
+```
+
+
+#### 1. 
+After data wrangling, the resulting dataframe has `r nrow(accel_df)` observations and `r ncol(accel_df)` variables. The variables include:
+
+* `week`: numeric variable from the original data, contains 5 integers from 1 to 5.
+* `day_id`: numeric variable from the original data, contains 35 integers from 1 to 35.
+* `day`: `day` variable from the original data, is a character variable containing 7 unique values `r unique(pull(accel_df,day))`
+* `weekend`: a newly created factor variable containing factors `1` and `0`, where `1` stands for weekend, and `0` stands for weekdays.
+* `minute`: a newly created numeric variable by `pivot_longer` of the original variable `activity.*`. It stands for the minute when the activity occurs.
+* `activity_count`: another newly created numeric variable by `pivot_longer` of the original variable `activity.*`. It contains the original activity counts for each minute.
+
+An overview of first 10 lines of the resulting dataset is shown below:
+
+```{r}
+knitr::kable(head(accel_df,10))
+```
+
+
+Traditional analyses of accelerometer data focus on the total activity over the day. Using your tidied dataset, aggregate across minutes to create a total activity variable for each day, and create a table showing these totals. Are any trends apparent?
+
+#### 2. 
+The above scatter plot shows the total activity counts calculated from the `accel_df` dataset over days.
+
+```{r}
+accel_df %>% 
+  group_by(day_id) %>% 
+  summarize(total_activity_count = sum(activity_count)) %>% 
+  ggplot(aes(x = day_id, y = total_activity_count,color = total_activity_count))+
+  geom_point(alpha = .8)+
+  labs(
+    title = "Total activity counts over days",
+    x = "Day",
+    y = "Total activity counts"
+  )
+```
+
+
+From the plot, total activity counts seem to jump up and down across days and does not have apparent daily trends. 
+
+#### 3.
+
+Accelerometer data allows the inspection activity over the course of the day. Make a single-panel plot that shows the 24-hour activity time courses for each day and use color to indicate day of the week. Describe in words any patterns or conclusions you can make based on this graph.
+
+
+
 
 
 
