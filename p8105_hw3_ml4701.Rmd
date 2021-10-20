@@ -8,6 +8,13 @@ output: github_document
 ```{r, echo=FALSE,message=FALSE}
 library(tidyverse)
 library(p8105.datasets)
+library(viridis)
+
+knitr::opts_chunk$set(
+  fig.width = 6,
+  fig.asp =.9,
+  out.width = "90%"
+)
 ```
 
 
@@ -17,14 +24,7 @@ Let's load the `instacart` data and view the first 10 lines of it:
 
 ```{r}
 data("instacart")
-knitr::kable(head(instacart,15))
-```
-
-
-```{r, results='hide'}
-skimr::skim(instacart)
-# Results is for my reference and is not shown in the report
-colnames_inst = colnames(instacart)
+knitr::kable(head(instacart,10))
 ```
 
 #### EDA
@@ -118,14 +118,13 @@ We can find that the minimum number of product bought is 1, maximum is 80, and a
 
 ```{r}
 inst_order %>% 
-  ggplot(aes(x=n_product))+ geom_histogram()+
+  ggplot(aes(x=n_product))+ geom_histogram(fill = "4",alpha = .7)+
   labs(
     title = "Count of number of products purchased in seperate orders",
     x = "Number of products in seperate orders",
     y = "Count of orders"
   )
   
-
 ```
 
 #### Questions
@@ -202,3 +201,122 @@ knitr::kable(hour_week)
 ```
 
 The above 2*7 table shows the mean hour of the day at which `Pink Lady Apples` and `Coffee Ice Cream` are ordered from Sun to Sat.
+
+
+### Problem 2
+
+
+#### Data Loading and Cleaning
+
+First 10 lines of the processes dataset is shown below:
+
+```{r}
+data("brfss_smart2010")
+
+brfss = brfss_smart2010 %>% 
+  janitor::clean_names() %>% 
+  filter(topic == "Overall Health",
+         response == "Excellent" | response == "Poor") %>% 
+  mutate(
+    response = fct_reorder(response,response, .desc = TRUE)
+  )
+
+knitr::kable(head(brfss,10))
+```
+
+
+#### Questions
+
+**1. In 2002, which states were observed at 7 or more locations? What about in 2010?**
+
+```{r}
+states_2002 = brfss %>% 
+  filter(year == 2002) %>% 
+  group_by(locationabbr) %>% 
+  summarize(year = 2002,
+            n_location = n_distinct(locationdesc)) %>% 
+  filter(n_location >= 7)
+knitr::kable(states_2002)
+
+states_2010 = brfss %>% 
+  filter(year == 2010) %>% 
+  group_by(locationabbr) %>% 
+  summarize(year = 2010,
+            n_location = n_distinct(locationdesc)) %>% 
+  filter(n_location >= 7)
+knitr::kable(states_2010)
+```
+
+In 2002, state including `r pull(states_2002,locationabbr)`were observed at 7 or more locations;
+In 2010, state including `r pull(states_2010,locationabbr)`were observed at 7 or more locations.
+
+
+
+**2. Construct a dataset that is limited to Excellent responses, and contains, year, state, and a variable that averages the data_value across locations within a state. Make a "spaghetti" plot of this average value over time within a state (that is, make a plot showing a line for each state across years – the geom_line geometry and group aesthetic will help).**
+
+We construct the required dataset as `excl_df`. `NA` values are omitted when calculating mean value of `data_value`. A preview of 10 lines was shown below.
+
+```{r}
+
+excl_df = brfss %>% 
+  filter(response == "Excellent") %>% 
+  select(year, locationabbr,data_value) %>% 
+  group_by(locationabbr,year) %>% 
+  mutate(mean_data_value = mean(data_value,na.rm = TRUE)) %>% 
+  select(-data_value) %>% 
+  distinct()
+
+knitr::kable(head(excl_df,10))
+```
+
+
+A "spaghetti" plot the average value over year within a state is shown below.
+
+
+```{r}
+excl_df %>% 
+  ggplot(aes(x = year, y = mean_data_value, group = locationabbr, color = locationabbr)) +
+  geom_line()+
+  labs(
+    title = "Spaghetti plot of average data_value within a state",
+    subtitle = "From Year 2002 - 2010",
+    y = "average data_value within state"
+  )+
+  scale_color_viridis(name = "States",discrete = TRUE)
+
+```
+
+
+
+**3. Make a two-panel plot showing, for the years 2006, and 2010, distribution of data_value for responses ("Poor" to "Excellent") among locations in NY State.**
+
+The following violin plot shows the differences in distribution of `data_value` for `response`s "Poor" and "Excellent" between 2006 and 2010 among locations in NY State.
+
+```{r}
+brfss %>% 
+  filter(year == 2006 | year == 2010,
+         locationabbr == "NY") %>% 
+  select(year,response,data_value) %>% 
+  ggplot(aes(x = response, y = data_value, color = response))+
+  geom_violin(aes(fill = response))+
+  facet_grid(.~year)+
+  labs(
+    title = "Distribution of data_value for responses \"Poor\" and \"Excellent\"",
+    subtitle = "A comparison between Year 2006 and 2010 among locations in NY State",
+    x = "Responses",
+    y = "Data_value of locations within NY state"
+  )
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
