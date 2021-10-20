@@ -152,14 +152,18 @@ instacart %>%
   summarize(n_items = n()) %>% 
   filter(n_items > 10000) %>% 
   mutate(aisle = fct_reorder(aisle,n_items),
+         n_level = case_when(n_items < 20000 ~ "below 20,000",
+                           n_items > 20000 ~ "above 20,000")
          ) %>% 
-  ggplot(aes(x = n_items, y = aisle))+
-  geom_point(color = 4,size = 2, alpha = .6)+
+  ggplot(aes(x = aisle, y = n_items,fill = n_level))+
+  geom_bar(stat = "identity",alpha = .6)+
+  coord_flip() +
   labs(
     title = "Number of items ordered in each aisle",
-    subtitle = "(for number of items more than 10000)",
-    x = "Number of items",
-    y = "Aisle"
+    subtitle = "(for number of items more than 10,000)",
+    x = "Aisle",
+    y = "Number of items",
+    fill = "Level of item numbers"
   )
 ```
 
@@ -192,7 +196,7 @@ hour_week = instacart %>%
   select(product_name, order_dow,order_hour_of_day) %>% 
   filter(product_name == "Pink Lady Apples" | product_name == "Coffee Ice Cream") %>% 
   group_by(product_name,order_dow) %>% 
-  mutate(mean_hour = mean(order_hour_of_day)) %>% 
+  mutate(mean_hour = round(mean(order_hour_of_day))) %>% 
   select(-order_hour_of_day) %>% 
   distinct() %>% 
   pivot_wider(names_from = order_dow,values_from = mean_hour,names_sort = TRUE)
@@ -290,13 +294,13 @@ A "spaghetti" plot the average value over year within a state is shown below.
 ```{r}
 excl_df %>% 
   ggplot(aes(x = year, y = mean_data_value, group = locationabbr, color = locationabbr)) +
-  geom_line()+
+  geom_line(size = .7)+
   labs(
     title = "Average data_value within a state",
     subtitle = "From Year 2002 - 2010",
-    y = "average data_value within state"
-  )+
-  scale_color_viridis(name = "States",discrete = TRUE)
+    y = "average data_value within state",
+    color = "States"
+  )
 
 ```
 
@@ -329,10 +333,11 @@ brfss %>%
 #### Loading and tidying data
 
 ```{r}
-accel_df = read_csv("data/accel_data.csv") %>% 
+accel_df = read_csv("data/accel_data.csv") %>%
   janitor::clean_names() %>% 
   mutate(
     weekend = ifelse(day %in% c("Saturday","Sunday"),1,0),
+         day = factor(day,levels = c("Sunday","Monday","Tuesday","Wednesday","Thursday","Friday","Saturday"))
     ) %>% 
   pivot_longer(4:1443,names_to = "minute", names_prefix = "activity_",values_to = "activity_count") %>% 
   mutate(
@@ -347,7 +352,7 @@ After data wrangling, the resulting dataframe has `r nrow(accel_df)` observation
 
 * `week`: numeric variable from the original data, contains 5 integers from 1 to 5.
 * `day_id`: numeric variable from the original data, contains 35 integers from 1 to 35.
-* `day`: `day` variable from the original data, is a character variable containing 7 unique values `r unique(pull(accel_df,day))`
+* `day`: `day` character variable containing 7 unique values `r levels(pull(accel_df,day))` from the original data, here converted to factor variable.
 * `weekend`: a newly created factor variable containing factors `1` and `0`, where `1` stands for weekend, and `0` stands for weekdays.
 * `minute`: a newly created numeric variable by `pivot_longer` of the original variable `activity.*`. It stands for the minute when the activity occurs.
 * `activity_count`: another newly created numeric variable by `pivot_longer` of the original variable `activity.*`. It contains the original activity counts for each minute.
@@ -359,29 +364,37 @@ knitr::kable(head(accel_df,10))
 ```
 
 
-Traditional analyses of accelerometer data focus on the total activity over the day. Using your tidied dataset, aggregate across minutes to create a total activity variable for each day, and create a table showing these totals. Are any trends apparent?
-
 #### 2. 
-The above scatter plot shows the total activity counts calculated from the `accel_df` dataset over days.
+The following table presents the total activity counts calculated from the `accel_df` dataset over days. Also, a scatter plot is generated to help observe whether there's a trend line under the data. 
 
 ```{r}
 accel_df %>% 
-  group_by(day_id) %>% 
+  group_by(day_id,day) %>% 
   summarize(total_activity_count = sum(activity_count)) %>% 
-  ggplot(aes(x = day_id, y = total_activity_count))+
-  geom_point(color = 4,size = 3,alpha = .6)+
+  knitr::kable()
+  
+accel_df %>% 
+  group_by(day_id,day) %>% 
+  summarize(total_activity_count = sum(activity_count)) %>%
+  ggplot(aes(x = day_id, y = total_activity_count,color = day))+
+  geom_point(size = 3,alpha = .6)+
+  geom_line(aes(group = day),size = .8)+
   labs(
     title = "Total activity counts over days",
     x = "Day",
-    y = "Total activity counts"
-  )+scale_y_continuous(
+    y = "Total activity counts",
+    color = "Day of the week"
+  )+ scale_x_continuous(
+    breaks = c(1,8,15,22,29,35),
+    labels = c(1,8,15,22,29,35)
+  )+ scale_y_continuous(
     breaks = c(0,200000,400000,600000),
     labels = c(0,'200,000','400,000','600,000')
   )
 ```
 
 
-From the plot, total activity counts seem to jump up and down across days and does not have apparent daily trends. 
+From both the table and plot, total activity counts does not seem have apparent trends. 
 
 #### 3.
 
@@ -393,8 +406,7 @@ To generate the 24-hour activity time courses for each day, convert minute to ho
 ```{r}
 accel_df %>% 
   mutate(hour_0_24 = floor(minute/60),
-         hour = ifelse(hour_0_24 == 24, 0, hour_0_24),
-         day = factor(day,levels = c("Sunday","Monday","Tuesday","Wednesday","Thursday","Friday","Saturday"))) %>% 
+         hour = ifelse(hour_0_24 == 24, 0, hour_0_24)) %>% 
   group_by(hour,day_id,day) %>%
   summarize(activity_count_hour = sum(activity_count)) %>%
   ggplot(aes(x = hour, y = activity_count_hour,group = day_id,color = day))+
@@ -403,8 +415,6 @@ accel_df %>%
     title = "24-hour activity counts for 35 measurement days",
     y = "activities counts in one hour break"
   )
-  
-  
   
 ```
 
